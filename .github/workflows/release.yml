@@ -10,19 +10,14 @@ permissions:
 
 jobs:
   build-unix:
-    name: Build Linux, macOS, BSD, Android, and iOS artifacts
+    name: Build OpenBSD artifacts
     uses: ./.github/workflows/build.yml
-
-  build-windows:
-    name: Build Windows artifacts
-    uses: ./.github/workflows/build-win.yaml
 
   publish-release:
     name: Publish GitHub release
     runs-on: ubuntu-latest
     needs:
       - build-unix
-      - build-windows
     steps:
       - name: Download release artifacts
         uses: actions/download-artifact@v4
@@ -55,5 +50,3 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ steps.collect-release-files.outputs.files }}
-          prerelease: ${{ contains(github.ref_name, 'a') || contains(github.ref_name, 'b') || contains(github.ref_name, 'rc') }}
-          draft: ${{ contains(github.ref_name, 'a') || contains(github.ref_name, 'b') || contains(github.ref_name, 'rc') }}
