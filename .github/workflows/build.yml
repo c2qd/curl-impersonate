@@ -18,7 +18,7 @@ permissions:
 
 env:
   MACOSX_DEPLOYMENT_TARGET: 11.0
-  API: "21"  # Targeting an very old android API version
+  API: "21" # Targeting an very old android API version
   LICENSE_FILES: >-
     LICENSE
     LICENSE_BORINGSSL
@@ -400,69 +400,67 @@ jobs:
   build-bsd:
     name: (${{ matrix.host_label }}) Build curl-impersonate
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: cpa.sh {0}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: FreeBSD
-            vm_arch: x86_64
+          - os: freebsd
+            version: "14.5"
+            architecture: x86-64
             host_label: x86_64-freebsd
             release_only: false
-          - os: FreeBSD
-            vm_arch: aarch64
+          - os: freebsd
+            version: "14.5"
+            architecture: arm64
             host_label: aarch64-freebsd
             release_only: true
-          - os: OpenBSD
-            vm_arch: x86_64
+          - os: openbsd
+            version: "7.9"
+            architecture: x86-64
             host_label: x86_64-openbsd
             release_only: false
-          - os: OpenBSD
-            vm_arch: aarch64
+          - os: openbsd
+            version: "7.9"
+            architecture: arm64
             host_label: aarch64-openbsd
-            release_only: true
-          - os: OpenBSD
-            vm_arch: riscv64
-            host_label: riscv64-openbsd
             release_only: true
     steps:
       - name: Skip release-only ${{ matrix.os }} target
         if: ${{ matrix.release_only && !startsWith(github.ref, 'refs/tags/') }}
+        shell: sh
         run: echo "Skipping ${{ matrix.host_label }} outside release tag builds."
 
       - name: Check out the repo
         if: ${{ !matrix.release_only || startsWith(github.ref, 'refs/tags/') }}
         uses: actions/checkout@v2
 
-      - name: Start FreeBSD VM
-        uses: vmactions/freebsd-vm@v1
-        if: ${{ matrix.os == 'FreeBSD' && (!matrix.release_only || startsWith(github.ref, 'refs/tags/')) }}
+      - name: Start ${{ matrix.os }} VM
+        if: ${{ !matrix.release_only || startsWith(github.ref, 'refs/tags/') }}
+        uses: cross-platform-actions/action@v1
         with:
-          release: "14.3"
-          arch: ${{ matrix.vm_arch }}
-          cpu: 4
-          mem: 8192
-          custom-shell-name: vmsh
-          prepare: |
-            export IGNORE_OSVERSION=yes
-            pkg update -f
-            pkg install -y pkgconf cmake ninja curl autoconf automake libtool gmake gperf go
+          operating_system: ${{ matrix.os }}
+          architecture: ${{ matrix.architecture }}
+          version: ${{ matrix.version }}
+          shell: sh
+          memory: 8G
+          cpu_count: 4
 
-      - name: Start OpenBSD VM
-        uses: vmactions/openbsd-vm@v1
-        if: ${{ matrix.os == 'OpenBSD' && (!matrix.release_only || startsWith(github.ref, 'refs/tags/')) }}
-        with:
-          release: "7.9"
-          arch: ${{ matrix.vm_arch }}
-          cpu: 4
-          mem: 8192
-          custom-shell-name: vmsh
-          prepare: |
-            pkg_add -Uu
-            pkg_add cmake ninja gmake
+      - name: Install build dependencies
+        if: ${{ !matrix.release_only || startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          if [ '${{ matrix.os }}' == 'freebsd' ]; then
+            sudo pkg update -f
+            sudo pkg install -y pkgconf cmake ninja curl autoconf automake libtool gmake gperf go
+          elif [ '${{ matrix.os }}' == 'openbsd' ]; then
+            sudo pkg_add -Uu
+            sudo pkg_add cmake ninja gmake
+          fi
 
       - name: Build in ${{ matrix.os }}
         if: ${{ !matrix.release_only || startsWith(github.ref, 'refs/tags/') }}
-        shell: vmsh {0}
         run: |
           set -e
           install_dir="$PWD/install"
