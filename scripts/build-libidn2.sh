@@ -12,8 +12,8 @@ src_dir="$build_dir/deps/src"
 build_deps_dir="$build_dir/deps/build"
 downloads_dir="$build_dir/deps/downloads"
 
-libidn2_version="2.3.7"
-libidn2_sha256="4c21a791b610b9519b9d0e12b8097bf2f359b12f8dd92647611a929e6bfd7d64"
+libidn2_version="2.3.8"
+libidn2_sha256="f557911bf6171621e1f72ff35f5b1825bb35b52ed45325dcdee931e5d3c0787a"
 libidn2_urls="https://mirrors.ocf.berkeley.edu/gnu/libidn/libidn2-$libidn2_version.tar.gz https://ftp.fau.de/gnu/libidn/libidn2-$libidn2_version.tar.gz https://ftp.nluug.nl/pub/gnu/libidn/libidn2-$libidn2_version.tar.gz https://ftpmirror.gnu.org/gnu/libidn/libidn2-$libidn2_version.tar.gz https://ftp.gnu.org/gnu/libidn/libidn2-$libidn2_version.tar.gz"
 
 make_cmd=${MAKE:-make}
@@ -25,8 +25,10 @@ if [ -n "${JOBS:-}" ]; then
   make_jobs="-j$JOBS"
 fi
 
-sha256sum_cmd=sha256sum
-if command -v sha256 >/dev/null 2>&1; then
+sha256sum_cmd=false
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256sum_cmd=sha256sum
+elif command -v sha256 >/dev/null 2>&1; then
   sha256sum_cmd=sha256
 fi
 
