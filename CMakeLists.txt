@@ -479,6 +479,7 @@ if(NOT WIN32)
     "CPLUS_INCLUDE_PATH="
     "LIBRARY_PATH="
     "PKG_CONFIG_PATH="
+    "PKG_CONFIG_LIBDIR="
   )
 endif()
 
