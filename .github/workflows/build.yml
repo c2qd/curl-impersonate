@@ -565,6 +565,94 @@ jobs:
             tar -czf "$artifacts_dir/curl-impersonate.${{ matrix.host_label }}.tar.gz" curl-impersonate curl_* -C "$license_dir" $license_files
           fi
 
+      - name: Upload artifacts
+        if: ${{ !matrix.release_only || startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts.${{ matrix.host_label }}
+          path: artifacts/*.tar.gz
+
+  build-mingw:
+    name: (${{ matrix.host_label }}) Build curl-impersonate
+    runs-on: ubuntu-latest
+    env:
+      LLVM_MINGW: "20261020"
+      LLVM_MINGW_CHECKSUM: "55064b60b991a1e1e8090b8c2f84e82b22cfe5903d12c159d65064cf5e8ae335"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            host_label: x86_64-mingw64-win32
+          - arch: i686
+            host_label: i686-mingw64-win32
+          - arch: aarch64
+            host_label: aarch64-mingw64-win32
+          - arch: armv7
+            host_label: armv7-mingw64-win32
+
+    steps:
+      - name: Check out the repo
+        if: ${{ !matrix.release_only || startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/checkout@v2
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install curl ca-certificates cmake make ninja-build nasm xz-utils patch
+          if [[ "${{ matrix.arch }}" == "i686" ]]; then
+            sudo dpkg --add-architecture i386
+            sudo apt-get update
+            sudo apt-get install wine wine32
+          elif [[ "${{ matrix.arch }}" == "x86_64" ]]; then
+            sudo apt-get install wine wine64
+          fi
+
+          curl -fsSL -o llvm-mingw.tar.xz "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW/llvm-mingw-$LLVM_MINGW-ucrt-ubuntu-22.04-x86_64.tar.xz"
+          printf '%s  %s\n' $LLVM_MINGW_CHECKSUM llvm-mingw.tar.xz | sha256sum -c -
+          sudo mkdir -p /opt/llvm-mingw
+          sudo tar -xJf llvm-mingw.tar.xz --strip-components=1 -C /opt/llvm-mingw
+          rm -f llvm-mingw.tar.xz
+          echo "MINGW_ROOT=/opt/llvm-mingw" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: |
+          install_dir="$PWD/install"
+          artifacts_dir="$PWD/artifacts"
+          rm -rf build "$install_dir" "$artifacts_dir"
+          mkdir -p "$install_dir" "$artifacts_dir"
+
+          cmake_args="-G Ninja -DCMAKE_INSTALL_PREFIX=$install_dir"
+          cmake_args="$cmake_args -DUSE_LIBIDN2=OFF"
+          CMAKE_CONFIGURE_ARGS="$cmake_args" BUILD_DIR=build ./scripts/mingw.sh configure --toolchain=clang --arch="${{ matrix.arch }}"
+          CMAKE_CONFIGURE_ARGS="$cmake_args" BUILD_DIR=build ./scripts/mingw.sh build --toolchain=clang --arch="${{ matrix.arch }}"
+
+          if [[ "${{ matrix.arch }}" == "x86_64" ]] || [[ "${{ matrix.arch }}" == "i686" ]]; then
+            CMAKE_CONFIGURE_ARGS="$cmake_args" BUILD_DIR=build USE_WINE=1 ./scripts/mingw.sh checkbuild --toolchain=clang --arch="${{ matrix.arch }}"
+          fi
+
+          CMAKE_CONFIGURE_ARGS="$cmake_args" BUILD_DIR=build ./scripts/mingw.sh install-strip --toolchain=clang --arch="${{ matrix.arch }}"
+
+          cmake -P build/CollectLicenses.cmake
+          license_dir="${{ github.workspace }}/build/licenses"
+          license_files="$LICENSE_FILES"
+
+          install_lib_dir="$install_dir/lib"
+
+          cd "$install_lib_dir"
+          if [[ "${{ startsWith(github.ref, 'refs/tags/') }}" == "true" ]]; then
+            tar -czf $artifacts_dir/libcurl-impersonate-${{ github.ref_name }}.${{ matrix.host_label }}.tar.gz -C "$install_lib_dir" lib*.dll* -C "$install_dir" include -C "$license_dir" $license_files
+          else
+            tar -czf $artifacts_dir/libcurl-impersonate.${{ matrix.host_label }}.tar.gz -C "$install_lib_dir" lib*.dll* -C "$install_dir" include -C "$license_dir" $license_files
+          fi
+
+          cd "$install_dir/bin"
+          if [[ "${{ startsWith(github.ref, 'refs/tags/') }}" == "true" ]]; then
+            tar -czf $artifacts_dir/curl-impersonate-${{ github.ref_name }}.${{ matrix.host_label }}.tar.gz curl-impersonate.exe curl_* -C "$license_dir" $license_files
+          else
+            tar -czf $artifacts_dir/curl-impersonate.${{ matrix.host_label }}.tar.gz curl-impersonate.exe curl_* -C "$license_dir" $license_files
+          fi
+
       - name: Upload ${{ matrix.os }} artifacts
         if: ${{ !matrix.release_only || startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
